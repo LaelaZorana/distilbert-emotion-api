@@ -1,0 +1,44 @@
+# Fly.io deployment for the emotion API.
+#   fly launch --no-deploy      # create the app from this file
+#   fly deploy                  # build remotely and roll out
+#
+# Runs in offline (stub) mode by default so a deploy works with zero external
+# dependencies. For the real model, set OFFLINE=0 and build from
+# requirements-ml.txt (expect a larger image and more memory).
+
+app = "distilbert-emotion-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  OFFLINE = "1"
+  PORT = "8000"
+  LOG_LEVEL = "INFO"
+  MAX_BATCH_SIZE = "64"
+  BATCH_MAX_DELAY_MS = "5"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"   # bump to >=2gb when OFFLINE=0 (torch + weights)

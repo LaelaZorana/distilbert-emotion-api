@@ -1,0 +1,23 @@
+# Render.com blueprint for the emotion API.
+# Connect the repo in the Render dashboard and it will pick up this file
+# (Infrastructure as Code). Deploys the Docker image with a health check.
+
+services:
+  - type: web
+    name: distilbert-emotion-api
+    runtime: docker
+    plan: starter            # bump for the real model (OFFLINE=0 needs more RAM)
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: OFFLINE
+        value: "1"
+      - key: PORT
+        value: "8000"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_BATCH_SIZE
+        value: "64"
+      - key: BATCH_MAX_DELAY_MS
+        value: "5"

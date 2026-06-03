@@ -1,0 +1,5 @@
+# Heavy ML stack — only needed for a REAL model run (OFFLINE=0).
+# The service, demo, tests, and load test all work without these in offline mode.
+-r requirements.txt
+torch>=2.1
+transformers>=4.38

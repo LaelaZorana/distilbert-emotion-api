@@ -1,0 +1,21 @@
+[project]
+name = "distilbert-emotion-api"
+version = "1.0.0"
+description = "Production inference service for the LaelaZ/distilbert-emotion model."
+authors = [{ name = "Laela Zorana" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]

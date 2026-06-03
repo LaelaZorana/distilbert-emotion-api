@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtualenvs
+venv/
+.venv/
+env/
+
+# Local env / secrets (never commit real values; .env.example is the template)
+.env
+.env.*
+!.env.example
+
+# Terraform state (never commit state — it can contain secrets)
+deploy/terraform/.terraform/
+deploy/terraform/*.tfstate
+deploy/terraform/*.tfstate.*
+deploy/terraform/.terraform.lock.hcl
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Model weights are pulled from the HF Hub at runtime (OFFLINE=0), never vendored.
+model/
+*.safetensors
+*.bin
+.venv-audit/
+.venv*/
+.claude/
