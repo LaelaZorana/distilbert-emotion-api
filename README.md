@@ -1,22 +1,22 @@
 # distilbert-emotion-api
 
-A batched, observable, deploy-ready FastAPI inference service that serves the fine-tuned [`LaelaZ/distilbert-emotion`](https://huggingface.co/LaelaZ/distilbert-emotion) classifier — and runs **fully offline** for development, CI, and load testing.
+A batched, observable, deploy-ready FastAPI inference service that serves the fine-tuned [`LaelaZ/distilbert-emotion`](https://huggingface.co/LaelaZ/distilbert-emotion) classifier, and runs **fully offline** for development, CI, and load testing.
 
 ## The problem
 
-Training a model is the easy half. The half that actually ships is everything around it: a typed HTTP contract, input validation, health probes, metrics a dashboard can read, request batching so throughput doesn't fall over under load, a container, and a deploy story. And none of that should require downloading 270 MB of weights (or a GPU, or network access) just to run the tests or demo the API.
+Training a model is the easy half. The half that actually matters is everything around it: a typed HTTP contract, input validation, health probes, metrics a dashboard can read, request batching so throughput doesn't fall over under load, a container, and a deploy story. And none of that should require downloading 270 MB of weights (or a GPU, or network access) just to run the tests or demo the API.
 
-This repo is that production layer for an emotion classifier — six emotions (sadness, joy, love, anger, fear, surprise) with full per-class probabilities — built so the entire service, its demo UI, its test suite, and its load test run with **zero downloads** by swapping the model for a deterministic stub when `OFFLINE=1`. Flip `OFFLINE=0` and the same code path loads the real DistilBERT from the Hub.
+This repo is that production layer for an emotion classifier (six emotions: sadness, joy, love, anger, fear, surprise, with full per-class probabilities), built so the entire service, its demo UI, its test suite, and its load test run with **zero downloads** by swapping the model for a deterministic stub when `OFFLINE=1`. Flip `OFFLINE=0` and the same code path loads the real DistilBERT from the Hub.
 
-> **The deployed [Hugging Face Space](https://huggingface.co/spaces/LaelaZ/distilbert-emotion-api) runs the real fine-tuned model** (built `WITH_MODEL=1`, `OFFLINE=0`) — so the public demo serves genuine DistilBERT predictions (acc 0.920 / macro F1 0.874). The lean, torch-free offline stub is what powers CI, local `docker compose`, and the load test, so development stays instant and key-free.
+> **The deployed [Hugging Face Space](https://huggingface.co/spaces/LaelaZ/distilbert-emotion-api) runs the real fine-tuned model** (built `WITH_MODEL=1`, `OFFLINE=0`), so the public demo serves genuine DistilBERT predictions (acc 0.920 / macro F1 0.874). The lean, torch-free offline stub is what powers CI, local `docker compose`, and the load test, so development stays instant and key-free.
 
 ## What it does
 
-- **`POST /predict`** — single (`{"text": ...}`) or batch (`{"texts": [...]}`), pydantic-validated, returns the top label plus the full probability distribution.
-- **`GET /healthz`** — readiness/liveness; 503 until the model is loaded and the batcher is running.
-- **`GET /metrics`** — Prometheus exposition: request count, latency histogram, in-flight gauge, error count, plus model-level inference latency and batch-size histograms.
-- **Dynamic micro-batching** — concurrent single requests are coalesced into one forward pass for throughput, with a latency cap you control.
-- **Offline stub** — a deterministic, lexicon-driven classifier so the API behaves (and tests pass) with no weights.
+- **`POST /predict`** takes single (`{"text": ...}`) or batch (`{"texts": [...]}`) input, pydantic-validated, and returns the top label plus the full probability distribution.
+- **`GET /healthz`** is readiness and liveness; it returns 503 until the model is loaded and the batcher is running.
+- **`GET /metrics`** is Prometheus exposition: request count, latency histogram, in-flight gauge, error count, plus model-level inference latency and batch-size histograms.
+- **Dynamic micro-batching** coalesces concurrent single requests into one forward pass for throughput, with a latency cap you control.
+- **Offline stub:** a deterministic, lexicon-driven classifier, so the API behaves (and tests pass) with no weights.
 - **Built-in demo UI** at `/demo` that calls the live API.
 
 ```mermaid
@@ -50,11 +50,11 @@ make bench-table    # the markdown row below
 | 8  | 595 | 13.35 | 16.49 | 19.97  |
 | 16 | 604 | 19.03 | 67.49 | 107.39 |
 
-Throughput scales ~5x from serial to 8 concurrent requests as the micro-batcher coalesces forward passes, while p50 stays in the low-teens of milliseconds; all runs completed with **0 errors**. (These reflect the stub plus full HTTP/validation/batching overhead — the real model adds per-call inference cost on top, but the service shape, batching wins, and tail-latency behavior are what's being measured here.)
+Throughput scales ~5x from serial to 8 concurrent requests as the micro-batcher coalesces forward passes, while p50 stays in the low-teens of milliseconds; all runs completed with **0 errors**. (These reflect the stub plus full HTTP/validation/batching overhead. The real model adds per-call inference cost on top, but the service shape, the batching wins, and the tail-latency behavior are what's being measured here.)
 
 ## Quickstart
 
-No model download, no GPU, no network — `OFFLINE=1` is the default.
+No model download, no GPU, no network. `OFFLINE=1` is the default.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -145,8 +145,8 @@ Exported metrics: `emotion_api_requests_total`, `emotion_api_request_latency_sec
 
 > _Placeholder._ Add screenshots of the demo UI (`/demo`), the Swagger docs (`/docs`), and the Grafana dashboard here.
 >
-> - `docs/demo-ui.png` — the emotion demo page
-> - `docs/grafana.png` — the Service Overview dashboard under load
+> - `docs/demo-ui.png`: the emotion demo page
+> - `docs/grafana.png`: the Service Overview dashboard under load
 
 ## Project layout
 
@@ -174,6 +174,6 @@ distilbert-emotion-api/
 
 ## License
 
-MIT — Copyright (c) 2026 Laela Zorana. See [LICENSE](LICENSE).
+MIT. Copyright (c) 2026 Laela Zorana. See [LICENSE](LICENSE).
 
 **Links:** [GitHub](https://github.com/LaelaZorana) · [Model on the Hub](https://huggingface.co/LaelaZ/distilbert-emotion) · [HuggingFace](https://huggingface.co/LaelaZ)
