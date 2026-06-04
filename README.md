@@ -8,6 +8,8 @@ Training a model is the easy half. The half that actually ships is everything ar
 
 This repo is that production layer for an emotion classifier — six emotions (sadness, joy, love, anger, fear, surprise) with full per-class probabilities — built so the entire service, its demo UI, its test suite, and its load test run with **zero downloads** by swapping the model for a deterministic stub when `OFFLINE=1`. Flip `OFFLINE=0` and the same code path loads the real DistilBERT from the Hub.
 
+> **The deployed [Hugging Face Space](https://huggingface.co/spaces/LaelaZ/distilbert-emotion-api) runs the real fine-tuned model** (built `WITH_MODEL=1`, `OFFLINE=0`) — so the public demo serves genuine DistilBERT predictions (acc 0.920 / macro F1 0.874). The lean, torch-free offline stub is what powers CI, local `docker compose`, and the load test, so development stays instant and key-free.
+
 ## What it does
 
 - **`POST /predict`** — single (`{"text": ...}`) or batch (`{"texts": [...]}`), pydantic-validated, returns the top label plus the full probability distribution.

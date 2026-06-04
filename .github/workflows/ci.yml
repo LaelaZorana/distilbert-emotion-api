@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # would be needed by a real GHCR push (kept disabled below)
+
+env:
+  IMAGE_NAME: distilbert-emotion-api
+
+jobs:
+  test:
+    name: Test (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests (offline stub, no model download)
+        env:
+          OFFLINE: "1"
+        run: pytest -q
+
+      - name: Smoke-test the load script against the in-process stub
+        env:
+          OFFLINE: "1"
+        run: python scripts/loadtest.py --requests 300 --concurrency 8 --warmup 20 --markdown
+
+  docker:
+    name: Build image (and dry-run GHCR push)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (load locally, do not push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: |
+            WITH_MODEL=0
+          push: false                      # never pushes from CI
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the built image
+        run: |
+          docker run -d --rm -e OFFLINE=1 -p 8000:8000 --name emotion_ci ${{ env.IMAGE_NAME }}:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/healthz >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          test "${ok:-0}" = "1" || (docker logs emotion_ci && exit 1)
+          curl -fsS -X POST http://localhost:8000/predict \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"i am so happy today"}'
+          docker stop emotion_ci
+
+      # ----------------------------------------------------------------------
+      # Publishing to GHCR is intentionally DISABLED. This job documents exactly
+      # how a real release would push, but the steps are guarded by `if: false`
+      # so CI never authenticates to or writes to any registry. To enable in a
+      # real deployment: remove the `if: false` guards and ensure the workflow
+      # runs on a trusted ref (e.g. a tag), not on PRs from forks.
+      # ----------------------------------------------------------------------
+      - name: (disabled) Log in to GHCR
+        if: false
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: (disabled) Push image to GHCR
+        if: false
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

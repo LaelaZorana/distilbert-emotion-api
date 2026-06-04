@@ -10,11 +10,14 @@
 
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_MODEL: "0"      # lean, torch-free local image (the public Space builds WITH_MODEL=1)
     image: distilbert-emotion-api:local
     container_name: emotion-api
     environment:
-      OFFLINE: "1"            # flip to 0 (and use requirements-ml) for the real model
+      OFFLINE: "1"            # local dev runs the instant stub; flip to 0 with a WITH_MODEL=1 build
       LOG_LEVEL: "INFO"
       MAX_BATCH_SIZE: "64"
       BATCH_MAX_DELAY_MS: "5"
