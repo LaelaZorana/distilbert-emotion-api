@@ -125,7 +125,7 @@ terraform init
 terraform apply -var="image=ghcr.io/laelazorana/distilbert-emotion-api:latest"
 ```
 
-CI (`.github/workflows/ci.yml`) runs the offline tests, builds the image, and smoke-tests it. The GHCR push step is present but **guarded off** (`if: false`) so CI never publishes — flip the guard to enable a real release.
+CI (`.github/workflows/ci.yml`) runs the offline tests, builds the image, and smoke-tests it. The GHCR push step is present but **guarded off** (`if: false`), so CI never publishes. Flip the guard to enable a real release.
 
 ## Monitoring
 
