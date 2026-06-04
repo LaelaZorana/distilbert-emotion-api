@@ -165,7 +165,7 @@ def create_app() -> FastAPI:
         return FileResponse(DEMO_DIR / "index.html")
 
     # Vendored, offline front-end assets (Tailwind Play CDN bundle). Mounting a
-    # directory keeps the demo page fully network-free — no external CDN at runtime.
+    # directory keeps the demo page fully network-free: no external CDN at runtime.
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

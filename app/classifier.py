@@ -6,12 +6,12 @@ where each dict maps every label to a probability that sums to 1.0.
 
 Two implementations satisfy that contract:
 
-* :class:`StubClassifier` — pure-Python, deterministic, zero downloads. Scores
+* :class:`StubClassifier`: pure-Python, deterministic, zero downloads. Scores
   text with a small hand-built emotion lexicon so the distribution is plausible
   and *stable* (the same sentence always yields the same probabilities), which
   is what makes offline demos, tests, and load tests meaningful. Selected when
   ``OFFLINE=1`` (the default).
-* :class:`TransformersClassifier` — the real fine-tuned DistilBERT loaded once
+* :class:`TransformersClassifier`: the real fine-tuned DistilBERT loaded once
   via a Hugging Face ``pipeline``. Selected when ``OFFLINE=0``.
 
 Both are warmed up on construction so the first real request is not slow.
@@ -50,7 +50,7 @@ def _softmax(scores: List[float]) -> List[float]:
 
 # --- Offline stub -----------------------------------------------------------
 
-# A compact emotion lexicon. Not meant to rival the real model — it exists so the
+# A compact emotion lexicon. Not meant to rival the real model, it exists so the
 # offline path produces a deterministic, label-aware distribution instead of a
 # constant, which keeps demos and tests honest. Weights are deliberately modest
 # so the softmax stays smooth rather than collapsing to a one-hot vector.

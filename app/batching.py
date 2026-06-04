@@ -13,7 +13,7 @@ Design notes:
 * The model is synchronous and CPU-bound, so it runs in a thread via
   ``run_in_executor`` to avoid blocking the event loop.
 * A failed batch propagates the exception to every waiter in that batch and the
-  loop keeps going — one bad batch never wedges the service.
+  loop keeps going. One bad batch never wedges the service.
 """
 from __future__ import annotations
 

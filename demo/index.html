@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Emotion Spectrum &middot; DistilBERT Inference API</title>
-<meta name="description" content="A playful, production-grade inference API for a fine-tuned DistilBERT emotion classifier. Type a sentence and watch the live POST /predict response paint the full six-emotion spectrum — micro-batched, observable, and runnable fully offline." />
+<meta name="description" content="A playful, production-grade inference API for a fine-tuned DistilBERT emotion classifier. Type a sentence and watch the live POST /predict response paint the full six-emotion spectrum, micro-batched, observable, and runnable fully offline." />
 
 <!-- Apply the saved theme before first paint to avoid a flash of the wrong mode. -->
 <script>
@@ -18,11 +18,11 @@
   })();
 </script>
 
-<!-- Tailwind (Play CDN) vendored offline — no network required at runtime. -->
+<!-- Tailwind (Play CDN) vendored offline, no network required at runtime. -->
 <script src="/static/tailwind.js"></script>
 <script>
   // The brand IS the emotion spectrum: every label owns a signature hue, and
-  // there is deliberately no single "primary" color — the accent is the rainbow
+  // there is deliberately no single "primary" color: the accent is the rainbow
   // of all six feelings. Exposed to Tailwind so utilities can reach each hue.
   tailwind.config = {
     darkMode: "class",
@@ -89,7 +89,7 @@
   .es-spectrum-bg { background-image: var(--spectrum); background-size: 200% 100%; animation: es-pan 9s linear infinite; }
   @keyframes es-pan { to { background-position: 200% 0; } }
 
-  /* Card — rounder + livelier shadow than the siblings. */
+  /* Card: rounder + livelier shadow than the siblings. */
   .es-card {
     border-radius: 1.25rem; border: 1px solid rgb(226 232 240);
     background: rgb(255 255 255 / .86); backdrop-filter: blur(8px);
