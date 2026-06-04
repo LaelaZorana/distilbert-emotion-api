@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Emotion Classifier &middot; DistilBERT Inference API</title>
-<meta name="description" content="Production FastAPI inference service for a fine-tuned DistilBERT emotion classifier — six emotions with full per-class probabilities, micro-batched, observable, and runnable fully offline." />
+<title>Emotion Spectrum &middot; DistilBERT Inference API</title>
+<meta name="description" content="A playful, production-grade inference API for a fine-tuned DistilBERT emotion classifier. Type a sentence and watch the live POST /predict response paint the full six-emotion spectrum — micro-batched, observable, and runnable fully offline." />
 
 <!-- Apply the saved theme before first paint to avoid a flash of the wrong mode. -->
 <script>
   (function () {
     try {
-      var saved = localStorage.getItem("emotion-api-theme");
+      var saved = localStorage.getItem("emotion-spectrum-theme");
       var dark = saved ? saved === "dark"
         : window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (dark) document.documentElement.classList.add("dark");
@@ -21,83 +21,139 @@
 <!-- Tailwind (Play CDN) vendored offline — no network required at runtime. -->
 <script src="/static/tailwind.js"></script>
 <script>
+  // The brand IS the emotion spectrum: every label owns a signature hue, and
+  // there is deliberately no single "primary" color — the accent is the rainbow
+  // of all six feelings. Exposed to Tailwind so utilities can reach each hue.
   tailwind.config = {
     darkMode: "class",
     theme: {
       extend: {
-        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+        fontFamily: {
+          // System-first: no runtime web-font CDN (offline by design).
+          sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace'],
+        },
         colors: {
-          brand: {
-            50: "#eef2ff", 100: "#e0e7ff", 200: "#c7d2fe", 300: "#a5b4fc",
-            400: "#818cf8", 500: "#6366f1", 600: "#4f46e5", 700: "#4338ca",
-            800: "#3730a3", 900: "#312e81",
-          },
+          joy:      { light: "#f59e0b", DEFAULT: "#f59e0b", dark: "#fbbf24" },
+          sadness:  { light: "#3b82f6", DEFAULT: "#3b82f6", dark: "#60a5fa" },
+          love:     { light: "#ec4899", DEFAULT: "#ec4899", dark: "#f472b6" },
+          anger:    { light: "#ef4444", DEFAULT: "#ef4444", dark: "#f87171" },
+          fear:     { light: "#8b5cf6", DEFAULT: "#8b5cf6", dark: "#a78bfa" },
+          surprise: { light: "#14b8a6", DEFAULT: "#14b8a6", dark: "#2dd4bf" },
         },
       },
     },
   };
 </script>
 
-<!-- Inter (online nicety; system sans is the offline fallback). -->
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-
 <style>
   html { scroll-behavior: smooth; }
   body {
-    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
-  /* Subtle page background glow (light + dark). */
-  .ea-bg {
-    background-image:
-      radial-gradient(60rem 60rem at 110% -10%, rgb(139 92 246 / .10), transparent 55%),
-      radial-gradient(50rem 50rem at -10% 0%, rgb(99 102 241 / .10), transparent 50%);
+
+  /* ---- Emotion-spectrum tokens (single source of truth, light + dark) ---- */
+  :root {
+    --joy: #f59e0b; --sadness: #3b82f6; --love: #ec4899;
+    --anger: #ef4444; --fear: #8b5cf6; --surprise: #14b8a6;
+    /* The signature gradient: the six feelings in a warm-to-cool sweep. */
+    --spectrum: linear-gradient(100deg,#3b82f6 0%,#8b5cf6 20%,#ec4899 40%,#ef4444 58%,#f59e0b 78%,#14b8a6 100%);
   }
-  .dark .ea-bg {
-    background-image:
-      radial-gradient(60rem 60rem at 110% -10%, rgb(139 92 246 / .16), transparent 55%),
-      radial-gradient(50rem 50rem at -10% 0%, rgb(99 102 241 / .14), transparent 50%);
+  .dark {
+    --joy: #fbbf24; --sadness: #60a5fa; --love: #f472b6;
+    --anger: #f87171; --fear: #a78bfa; --surprise: #2dd4bf;
+    --spectrum: linear-gradient(100deg,#60a5fa 0%,#a78bfa 20%,#f472b6 40%,#f87171 58%,#fbbf24 78%,#2dd4bf 100%);
   }
-  .ea-gradient-text {
-    background-image: linear-gradient(100deg, #4f46e5, #8b5cf6);
+
+  /* Page background: six soft emotion glows instead of one flat brand wash. */
+  .es-bg {
+    background-image:
+      radial-gradient(40rem 40rem at 8% -8%,  rgb(59 130 246 / .10), transparent 60%),
+      radial-gradient(36rem 36rem at 92% -4%, rgb(20 184 166 / .10), transparent 60%),
+      radial-gradient(44rem 44rem at 50% 0%,  rgb(236 72 153 / .07), transparent 55%);
+  }
+  .dark .es-bg {
+    background-image:
+      radial-gradient(40rem 40rem at 8% -8%,  rgb(96 165 250 / .14), transparent 60%),
+      radial-gradient(36rem 36rem at 92% -4%, rgb(45 212 191 / .12), transparent 60%),
+      radial-gradient(44rem 44rem at 50% 0%,  rgb(244 114 182 / .10), transparent 55%);
+  }
+
+  /* Spectrum text + fills. */
+  .es-spectrum-text {
+    background-image: var(--spectrum);
     -webkit-background-clip: text; background-clip: text; color: transparent;
+    background-size: 200% 100%;
+    animation: es-pan 9s linear infinite;
   }
-  /* Card. */
-  .ea-card {
-    border-radius: 1rem; border: 1px solid rgb(226 232 240);
-    background: rgb(255 255 255 / .85); backdrop-filter: blur(6px);
-    box-shadow: 0 1px 2px rgb(15 23 42 / .04), 0 8px 24px -12px rgb(15 23 42 / .12);
+  .es-spectrum-bg { background-image: var(--spectrum); background-size: 200% 100%; animation: es-pan 9s linear infinite; }
+  @keyframes es-pan { to { background-position: 200% 0; } }
+
+  /* Card — rounder + livelier shadow than the siblings. */
+  .es-card {
+    border-radius: 1.25rem; border: 1px solid rgb(226 232 240);
+    background: rgb(255 255 255 / .86); backdrop-filter: blur(8px);
+    box-shadow: 0 1px 2px rgb(15 23 42 / .04), 0 14px 40px -20px rgb(15 23 42 / .22);
   }
-  .dark .ea-card {
-    border-color: rgb(51 65 85 / .7); background: rgb(15 23 42 / .6);
-    box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 28px -14px rgb(0 0 0 / .6);
+  .dark .es-card {
+    border-color: rgb(51 65 85 / .65); background: rgb(15 23 42 / .62);
+    box-shadow: 0 1px 2px rgb(0 0 0 / .35), 0 16px 44px -22px rgb(0 0 0 / .7);
   }
-  .ea-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(99 102 241 / .4); }
-  /* Probability bar fill — animates width on update. */
-  .ea-fill { transition: width .55s cubic-bezier(.2,.8,.2,1); }
-  @keyframes ea-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .ea-fade { animation: ea-fade-in .24s ease both; }
-  .ea-spin { animation: ea-spin 0.7s linear infinite; }
-  @keyframes ea-spin { to { transform: rotate(360deg); } }
+
+  /* Primary button wears the spectrum. */
+  .es-btn-spectrum {
+    background-image: var(--spectrum); background-size: 200% 100%;
+    color: #fff; animation: es-pan 9s linear infinite;
+    box-shadow: 0 10px 26px -10px rgb(236 72 153 / .5);
+  }
+  .es-btn-spectrum:hover { filter: saturate(1.12) brightness(1.04); }
+
+  .es-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(236 72 153 / .45); }
+
+  /* Probability bars: animated width + a soft sheen as they fill. */
+  .es-fill {
+    transition: width .65s cubic-bezier(.2,.85,.25,1);
+    background-image: linear-gradient(90deg, rgb(255 255 255 / .28), rgb(255 255 255 / 0) 40%);
+  }
+
+  /* Confidence ring (conic gauge, colored by the winning emotion). */
+  .es-ring { transition: background .65s cubic-bezier(.2,.85,.25,1); }
+
+  /* Stacked "whole spectrum at a glance" strip. */
+  .es-strip-seg { transition: width .65s cubic-bezier(.2,.85,.25,1); }
+
+  /* Motion. */
+  @keyframes es-pop { 0% { opacity:0; transform: translateY(8px) scale(.985); } 100% { opacity:1; transform:none; } }
+  .es-pop { animation: es-pop .3s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes es-rise { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
+  .es-rise { animation: es-rise .26s ease both; }
+  .es-spin { animation: es-spin .7s linear infinite; }
+  @keyframes es-spin { to { transform: rotate(360deg); } }
+  @keyframes es-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  .es-float { animation: es-float 4.5s ease-in-out infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .es-spectrum-text, .es-spectrum-bg, .es-btn-spectrum, .es-float { animation: none; }
+    .es-fill, .es-ring, .es-strip-seg { transition: none; }
+    html { scroll-behavior: auto; }
+  }
 </style>
 </head>
 
-<body class="ea-bg min-h-screen bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
+<body class="es-bg min-h-screen bg-slate-50 font-sans text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
 
 <!-- ================= Header ================= -->
 <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 backdrop-blur-md dark:border-slate-800/70 dark:bg-slate-950/70">
   <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
     <a href="#top" class="group flex items-center gap-2.5">
-      <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-500 text-white shadow-lg shadow-brand-500/30">
-        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" />
+      <span class="es-spectrum-bg grid h-9 w-9 place-items-center rounded-2xl text-white shadow-lg shadow-pink-500/30">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9.5" x2="9.01" y2="9.5" /><line x1="15" y1="9.5" x2="15.01" y2="9.5" />
         </svg>
       </span>
       <span class="flex flex-col leading-none">
-        <span class="text-base font-bold tracking-tight">Emotion<span class="ea-gradient-text">API</span></span>
-        <span class="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">DistilBERT inference</span>
+        <span class="text-base font-extrabold tracking-tight">Emotion<span class="es-spectrum-text">Spectrum</span></span>
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">DistilBERT inference API</span>
       </span>
     </a>
 
@@ -106,12 +162,12 @@
       <a href="#benchmark" class="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 sm:inline dark:text-slate-300 dark:hover:bg-slate-800">Benchmark</a>
       <a href="/docs" class="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 sm:inline dark:text-slate-300 dark:hover:bg-slate-800">API docs</a>
       <a href="https://github.com/LaelaZorana" target="_blank" rel="noopener"
-         class="ml-1 hidden items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 md:inline-flex">
+         class="es-btn-spectrum es-focus ml-1 hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold md:inline-flex">
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.69.82.57A12 12 0 0 0 12 .5Z"/></svg>
         GitHub
       </a>
       <button type="button" onclick="toggleTheme()" aria-label="Toggle dark mode"
-              class="ea-focus ml-1 grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+              class="es-focus ml-1 grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
         <svg class="h-5 w-5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg class="hidden h-5 w-5 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -122,26 +178,31 @@
 <main id="top" class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
 
   <!-- ================= Hero ================= -->
-  <section class="pt-14 pb-10 text-center sm:pt-20 sm:pb-14">
-    <span class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-500/20">
+  <section class="pt-14 pb-9 text-center sm:pt-20 sm:pb-12">
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
       <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span></span>
       FastAPI &middot; micro-batched &middot; observable &middot; runs offline
     </span>
-    <h1 class="mx-auto mt-5 max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">
-      Ship an <span class="ea-gradient-text">emotion classifier</span> that's actually production-ready
+
+    <h1 class="mx-auto mt-5 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-[3.4rem]">
+      Read the <span class="es-spectrum-text">feeling</span> behind any sentence
     </h1>
     <p class="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
-      A typed, batched, monitored inference service for a fine-tuned DistilBERT model — six emotions
-      with full per-class probabilities. Type a sentence below and watch the live
-      <code class="rounded bg-slate-100 px-1.5 py-0.5 text-sm text-brand-700 dark:bg-slate-800 dark:text-brand-300">POST /predict</code>
-      response, served by the offline stub.
+      A fine-tuned DistilBERT classifier, wrapped in a typed, batched, monitored API. Type a line and watch
+      the live
+      <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">POST&nbsp;/predict</code>
+      response paint the full six-emotion spectrum — served right now by the offline stub.
     </p>
+
+    <!-- Animated emotion-spectrum legend: the brand, made literal. -->
+    <div id="hero-legend" class="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-2"></div>
+
     <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-      <a href="#try" class="ea-focus inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition hover:bg-brand-700">
-        Try it now
+      <a href="#try" class="es-btn-spectrum es-focus inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold">
+        Try the classifier
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
-      <a href="/docs" class="ea-focus inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white/60 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:text-brand-400">
+      <a href="/docs" class="es-focus inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white/60 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:border-slate-500">
         Read the API docs
       </a>
     </div>
@@ -152,22 +213,25 @@
     <div class="grid gap-6 lg:grid-cols-5">
 
       <!-- Input -->
-      <div class="ea-card p-5 sm:p-6 lg:col-span-2">
-        <label for="text" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">Your sentence</label>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">The text is sent to <code>POST /predict</code> and classified into six emotions.</p>
+      <div class="es-card p-5 sm:p-6 lg:col-span-2">
+        <div class="flex items-center gap-2">
+          <span class="es-spectrum-bg h-2.5 w-2.5 rounded-full"></span>
+          <label for="text" class="block text-sm font-bold text-slate-700 dark:text-slate-200">Your sentence</label>
+        </div>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Sent to <code class="font-mono">POST /predict</code> and classified into six emotions with full probabilities.</p>
         <textarea id="text" rows="4"
-          class="ea-focus mt-3 w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          class="es-focus mt-3 w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-[15px] text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           placeholder="e.g. i can't believe this actually worked, i'm so relieved"></textarea>
 
         <button id="go" type="button"
-          class="ea-focus mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition hover:bg-brand-700 disabled:cursor-default disabled:opacity-60">
-          <svg id="go-spin" class="ea-spin hidden h-4 w-4 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/></svg>
-          <span id="go-label">Classify emotion</span>
+          class="es-btn-spectrum es-focus mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold disabled:cursor-default disabled:opacity-60">
+          <svg id="go-spin" class="es-spin hidden h-4 w-4 text-white/85" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/></svg>
+          <span id="go-label">Classify the feeling</span>
         </button>
         <p class="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">Press <kbd class="rounded border border-slate-300 px-1 dark:border-slate-600">⌘</kbd>/<kbd class="rounded border border-slate-300 px-1 dark:border-slate-600">Ctrl</kbd>+<kbd class="rounded border border-slate-300 px-1 dark:border-slate-600">Enter</kbd> to run</p>
 
         <div class="mt-5">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Or try an example</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Or try a feeling</p>
           <div id="examples" class="mt-2 flex flex-wrap gap-2"></div>
         </div>
       </div>
@@ -178,35 +242,59 @@
     </div>
   </section>
 
+  <!-- ================= API snippet (Replicate-style tabs) ================= -->
+  <section class="pt-14">
+    <div class="es-card overflow-hidden">
+      <div class="flex flex-col gap-1.5 border-b border-slate-100 px-5 pt-5 dark:border-slate-800/70 sm:px-6">
+        <h2 class="text-lg font-bold tracking-tight">The widget is just one HTTP call</h2>
+        <p class="text-sm text-slate-600 dark:text-slate-300">Everything above is <code class="font-mono">POST /predict</code>. Call it from anything — single sentence or a batch.</p>
+      </div>
+      <div class="flex items-center gap-1 px-5 pt-3 sm:px-6" role="tablist" aria-label="Code samples">
+        <button class="es-tab" data-tab="curl" aria-selected="true">cURL</button>
+        <button class="es-tab" data-tab="python" aria-selected="false">Python</button>
+        <button class="es-tab" data-tab="js" aria-selected="false">JavaScript</button>
+        <button id="copy-code" type="button" class="es-focus ml-auto mb-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="copy-label">Copy</span>
+        </button>
+      </div>
+      <pre class="mx-5 mb-5 overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 sm:mx-6 dark:bg-black/40"><code id="code-block"></code></pre>
+    </div>
+  </section>
+
   <!-- ================= Benchmark ================= -->
   <section id="benchmark" class="scroll-mt-20 pt-16">
     <div class="text-center">
       <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">Built for throughput, measured under load</h2>
       <p class="mx-auto mt-2 max-w-2xl text-slate-600 dark:text-slate-300">
         A dynamic micro-batcher coalesces concurrent requests into a single forward pass. Numbers from the
-        included <code class="rounded bg-slate-100 px-1.5 py-0.5 text-sm dark:bg-slate-800">scripts/loadtest.py</code>
+        included <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-sm dark:bg-slate-800">scripts/loadtest.py</code>
         against the offline stub, single worker, Apple-silicon laptop — reproducible from a clean checkout.
       </p>
     </div>
 
-    <!-- KPI cards -->
+    <!-- KPI cards, each kissed by a different emotion hue. -->
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="ea-card p-5">
+      <div class="es-card relative overflow-hidden p-5">
+        <span class="absolute inset-x-0 top-0 h-1" style="background:var(--joy)"></span>
         <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Peak throughput</div>
         <div class="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">604 <span class="text-base font-semibold text-slate-400">req/s</span></div>
         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">at 16 concurrent clients</div>
       </div>
-      <div class="ea-card p-5">
+      <div class="es-card relative overflow-hidden p-5">
+        <span class="absolute inset-x-0 top-0 h-1" style="background:var(--sadness)"></span>
         <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">p50 latency</div>
         <div class="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">8.3 <span class="text-base font-semibold text-slate-400">ms</span></div>
         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">serial round-trip, full stack</div>
       </div>
-      <div class="ea-card p-5">
+      <div class="es-card relative overflow-hidden p-5">
+        <span class="absolute inset-x-0 top-0 h-1" style="background:var(--love)"></span>
         <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Throughput scaling</div>
-        <div class="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">~5×</div>
-        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">serial → 8 concurrent (batcher)</div>
+        <div class="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">~5&times;</div>
+        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">serial &rarr; 8 concurrent (batcher)</div>
       </div>
-      <div class="ea-card p-5">
+      <div class="es-card relative overflow-hidden p-5">
+        <span class="absolute inset-x-0 top-0 h-1" style="background:var(--surprise)"></span>
         <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Errors</div>
         <div class="mt-1 text-3xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">0</div>
         <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">across all benchmarked runs</div>
@@ -214,7 +302,7 @@
     </div>
 
     <!-- Detail table -->
-    <div class="ea-card mt-6 overflow-hidden">
+    <div class="es-card mt-6 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -241,7 +329,7 @@
       </div>
       <p class="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 dark:border-slate-800/70 dark:text-slate-400">
         Reflects the stub plus full HTTP / validation / batching overhead. Reproduce with
-        <code class="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">make bench</code>.
+        <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">make bench</code>.
       </p>
     </div>
   </section>
@@ -254,73 +342,57 @@
     </div>
     <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-      <a href="/healthz" class="ea-card group p-5 transition hover:-translate-y-0.5 hover:border-brand-300 dark:hover:border-brand-500/40">
+      <a href="/healthz" class="es-card group p-5 transition hover:-translate-y-0.5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
-          <h3 class="font-semibold">Health probes</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--surprise)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+          <h3 class="font-bold">Health probes</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300"><code>GET /healthz</code> — readiness + liveness; 503 until the model is loaded and the batcher runs. Wired to a Docker <code>HEALTHCHECK</code>.</p>
-        <span class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400">Open /healthz <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300"><code class="font-mono">GET /healthz</code> — readiness + liveness; 503 until the model is loaded and the batcher runs. Wired to a Docker <code class="font-mono">HEALTHCHECK</code>.</p>
+        <span class="mt-3 inline-flex items-center gap-1 text-sm font-semibold" style="color:var(--surprise)">Open /healthz <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
 
-      <a href="/metrics" class="ea-card group p-5 transition hover:-translate-y-0.5 hover:border-brand-300 dark:hover:border-brand-500/40">
+      <a href="/metrics" class="es-card group p-5 transition hover:-translate-y-0.5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg></span>
-          <h3 class="font-semibold">Prometheus metrics</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--sadness)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg></span>
+          <h3 class="font-bold">Prometheus metrics</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300"><code>GET /metrics</code> — request rate, latency histogram, in-flight gauge, errors, plus model inference latency and batch-size histograms.</p>
-        <span class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400">Open /metrics <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300"><code class="font-mono">GET /metrics</code> — request rate, latency histogram, in-flight gauge, errors, plus model inference latency and batch-size histograms.</p>
+        <span class="mt-3 inline-flex items-center gap-1 text-sm font-semibold" style="color:var(--sadness)">Open /metrics <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
 
-      <a href="/docs" class="ea-card group p-5 transition hover:-translate-y-0.5 hover:border-brand-300 dark:hover:border-brand-500/40">
+      <a href="/docs" class="es-card group p-5 transition hover:-translate-y-0.5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
-          <h3 class="font-semibold">Typed OpenAPI contract</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--fear)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+          <h3 class="font-bold">Typed OpenAPI contract</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">pydantic v2 validation on every request; single + batch share one endpoint. Interactive Swagger UI at <code>/docs</code>.</p>
-        <span class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400">Open /docs <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">pydantic v2 validation on every request; single + batch share one endpoint. Interactive Swagger UI at <code class="font-mono">/docs</code>.</p>
+        <span class="mt-3 inline-flex items-center gap-1 text-sm font-semibold" style="color:var(--fear)">Open /docs <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
 
-      <div class="ea-card p-5">
+      <div class="es-card p-5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M3 12h4l2 5 4-10 2 5h4"/></svg></span>
-          <h3 class="font-semibold">Dynamic micro-batching</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--joy)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M3 12h4l2 5 4-10 2 5h4"/></svg></span>
+          <h3 class="font-bold">Dynamic micro-batching</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Concurrent single requests are coalesced into one forward pass with a latency cap you control — ~5× throughput under load.</p>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Concurrent single requests are coalesced into one forward pass with a latency cap you control — ~5&times; throughput under load.</p>
       </div>
 
-      <div class="ea-card p-5">
+      <div class="es-card p-5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></span>
-          <h3 class="font-semibold">Container + monitoring</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--love)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></span>
+          <h3 class="font-bold">Container + monitoring</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Multi-stage non-root Docker image; <code>docker compose up</code> brings up the API with Prometheus and a provisioned Grafana dashboard.</p>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Multi-stage non-root Docker image; <code class="font-mono">docker compose up</code> brings up the API with Prometheus and a provisioned Grafana dashboard.</p>
       </div>
 
-      <div class="ea-card p-5">
+      <div class="es-card p-5">
         <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></span>
-          <h3 class="font-semibold">Offline-first by default</h3>
+          <span class="grid h-10 w-10 place-items-center rounded-xl text-white" style="background:var(--anger)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></span>
+          <h3 class="font-bold">Offline-first by default</h3>
         </div>
-        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">A deterministic lexicon stub backs the API when <code>OFFLINE=1</code> — the whole service, demo, tests, and load test run with zero downloads. Flip to <code>OFFLINE=0</code> for the real model.</p>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">A deterministic lexicon stub backs the API when <code class="font-mono">OFFLINE=1</code> — the whole service, demo, tests, and load test run with zero downloads. Flip to <code class="font-mono">OFFLINE=0</code> for the real model.</p>
       </div>
 
-    </div>
-  </section>
-
-  <!-- ================= cURL CTA ================= -->
-  <section class="pt-16">
-    <div class="ea-card overflow-hidden">
-      <div class="flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
-        <div class="max-w-lg">
-          <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Same response, straight from your terminal</h2>
-          <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">The widget above is just <code>POST /predict</code>. Call it from anything — single sentence or a batch.</p>
-        </div>
-        <pre class="w-full overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 lg:max-w-xl dark:bg-black/40"><code>curl -s -X POST localhost:8000/predict \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "i can'"'"'t stop smiling today"}'
-<span class="text-slate-400"># {"label":"joy","score":0.74,"probabilities":{...}}</span></code></pre>
-      </div>
     </div>
   </section>
 
@@ -331,7 +403,7 @@
   <div class="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8 dark:text-slate-400">
     <p>Built by <span class="font-semibold text-slate-700 dark:text-slate-200">Laela Zorana</span> &middot; DistilBERT Emotion API <span id="ver"></span></p>
     <div class="flex flex-wrap items-center gap-4">
-      <a class="font-medium text-brand-600 hover:underline dark:text-brand-400" href="https://github.com/LaelaZorana" target="_blank" rel="noopener">GitHub</a>
+      <a class="font-medium text-slate-700 hover:underline dark:text-slate-200" href="https://github.com/LaelaZorana" target="_blank" rel="noopener">GitHub</a>
       <a class="hover:underline" href="https://huggingface.co/LaelaZ/distilbert-emotion" target="_blank" rel="noopener">Model on the Hub</a>
       <a class="hover:underline" href="/docs">API docs</a>
       <a class="hover:underline" href="/metrics">Metrics</a>
@@ -340,51 +412,90 @@
   </div>
 </footer>
 
+<style>
+  /* Code-sample tabs (kept with the markup that uses them). */
+  .es-tab {
+    border-radius: .55rem; padding: .4rem .8rem; font-size: .8rem; font-weight: 600;
+    color: rgb(100 116 139); transition: all .15s ease;
+  }
+  .es-tab:hover { background: rgb(241 245 249); }
+  .dark .es-tab { color: rgb(148 163 184); }
+  .dark .es-tab:hover { background: rgb(30 41 59 / .6); }
+  .es-tab[aria-selected="true"] {
+    color: #fff; background-image: var(--spectrum); background-size: 200% 100%;
+  }
+</style>
+
 <script>
+// Canonical label order matches app.LABELS.
+const LABELS = ["sadness", "joy", "love", "anger", "fear", "surprise"];
+
+// One signature identity per emotion. `cssVar` resolves the theme-aware token so
+// dark mode automatically gets the brighter variant.
 const META = {
-  joy:      { color:"#f59e0b", ring:"ring-amber-300",  emoji:"😄", blurb:"bright and upbeat" },
-  sadness:  { color:"#3b82f6", ring:"ring-blue-300",   emoji:"😢", blurb:"low and heavy" },
-  love:     { color:"#ec4899", ring:"ring-pink-300",   emoji:"🥰", blurb:"warm and tender" },
-  anger:    { color:"#ef4444", ring:"ring-red-300",    emoji:"😠", blurb:"hot and sharp" },
-  fear:     { color:"#8b5cf6", ring:"ring-violet-300", emoji:"😨", blurb:"tense and uneasy" },
-  surprise: { color:"#14b8a6", ring:"ring-teal-300",   emoji:"😲", blurb:"caught off guard" },
+  joy:      { emoji:"😄", blurb:"bright and buoyant",  cssVar:"--joy" },
+  sadness:  { emoji:"😢", blurb:"low and heavy",       cssVar:"--sadness" },
+  love:     { emoji:"🥰", blurb:"warm and tender",     cssVar:"--love" },
+  anger:    { emoji:"😠", blurb:"hot and sharp",       cssVar:"--anger" },
+  fear:     { emoji:"😨", blurb:"tense and uneasy",    cssVar:"--fear" },
+  surprise: { emoji:"😲", blurb:"caught off guard",    cssVar:"--surprise" },
 };
+
+// Examples carry the feeling they're meant to evoke, so each chip can wear its hue.
 const EXAMPLES = [
-  "i can't stop smiling, today went better than i ever hoped",
-  "i feel so let down after everything fell apart",
-  "my hands are shaking, i really can't walk in there",
-  "how dare they take credit for my work",
-  "i didn't expect this and now i'm grinning",
-  "i just feel so tender and grateful for you",
+  { label:"joy",      text:"i can't stop smiling, today went better than i ever hoped" },
+  { label:"sadness",  text:"i feel so let down after everything fell apart" },
+  { label:"fear",     text:"my hands are shaking, i really can't walk in there" },
+  { label:"anger",    text:"how dare they take credit for my work" },
+  { label:"surprise", text:"i didn't expect this at all and now i'm grinning" },
+  { label:"love",     text:"i just feel so tender and grateful for you" },
 ];
 
 const $ = (id) => document.getElementById(id);
 const out = $("out");
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#94a3b8";
+const colorFor = (label) => css((META[label] || {}).cssVar || "--love");
 
 window.toggleTheme = function () {
   const isDark = document.documentElement.classList.toggle("dark");
-  try { localStorage.setItem("emotion-api-theme", isDark ? "dark" : "light"); } catch (e) {}
+  try { localStorage.setItem("emotion-spectrum-theme", isDark ? "dark" : "light"); } catch (e) {}
+  // Repaint last result so the colors track the new theme.
+  if (LAST) render(LAST.pred, LAST.ms);
 };
 
+// ---- Hero legend: the six feelings as the brand palette. ----
+(function buildLegend() {
+  const host = $("hero-legend");
+  LABELS.forEach((label, i) => {
+    const m = META[label];
+    const chip = document.createElement("span");
+    chip.className = "es-float inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-300";
+    chip.style.animationDelay = (i * 0.35) + "s";
+    chip.innerHTML = `<span class="h-2.5 w-2.5 rounded-full" style="background:var(${m.cssVar})"></span><span>${m.emoji}</span><span class="capitalize">${label}</span>`;
+    host.appendChild(chip);
+  });
+})();
+
+// ---- Output states. ----
 function emptyState() {
   out.innerHTML = `
-    <div class="ea-card flex h-full min-h-[300px] flex-col items-center justify-center gap-3 p-10 text-center">
-      <span class="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-3xl dark:bg-brand-500/10">🎭</span>
-      <p class="max-w-xs text-sm text-slate-500 dark:text-slate-400">Type a sentence or pick an example, and the API will name the feeling underneath it — with the full probability breakdown.</p>
+    <div class="es-card flex h-full min-h-[320px] flex-col items-center justify-center gap-3 p-10 text-center">
+      <span class="es-float grid h-16 w-16 place-items-center rounded-2xl text-4xl" style="background:linear-gradient(135deg,var(--love),var(--joy))">🎭</span>
+      <p class="max-w-xs text-sm text-slate-500 dark:text-slate-400">Type a sentence or tap a feeling, and the API names the emotion underneath it — with the full spectrum of probabilities.</p>
     </div>`;
 }
 
 function loadingState() {
   out.innerHTML = `
-    <div class="ea-card flex h-full min-h-[300px] flex-col items-center justify-center gap-4 p-10 text-center">
-      <svg class="ea-spin h-8 w-8 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/></svg>
-      <p class="text-sm text-slate-500 dark:text-slate-400">Classifying…</p>
+    <div class="es-card flex h-full min-h-[320px] flex-col items-center justify-center gap-4 p-10 text-center">
+      <svg class="es-spin h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="url(#sg)" stroke-width="2.4"><defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ec4899"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/></svg>
+      <p class="text-sm text-slate-500 dark:text-slate-400">Reading the feeling…</p>
     </div>`;
 }
 
 function errorState(msg) {
   out.innerHTML = `
-    <div class="ea-card ea-fade flex h-full min-h-[300px] flex-col items-center justify-center gap-3 border-red-300/60 bg-red-50/60 p-10 text-center dark:border-red-500/30 dark:bg-red-500/5">
+    <div class="es-card es-rise flex h-full min-h-[320px] flex-col items-center justify-center gap-3 border-red-300/60 bg-red-50/60 p-10 text-center dark:border-red-500/30 dark:bg-red-500/5">
       <span class="grid h-12 w-12 place-items-center rounded-2xl bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">
         <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </span>
@@ -392,15 +503,23 @@ function errorState(msg) {
     </div>`;
 }
 
+let LAST = null; // remember the last good result so theme toggles can repaint.
+
 function render(pred, ms) {
+  LAST = { pred, ms };
   const probs = pred.probabilities;
   const ordered = Object.entries(probs).sort((a, b) => b[1] - a[1]);
   const top = pred.label;
-  const m = META[top] || { color:"#6366f1", emoji:"❓", blurb:"" };
+  const m = META[top] || { emoji:"❓", blurb:"", cssVar:"--love" };
+  const topColor = colorFor(top);
   const conf = Math.round(pred.score * 100);
+  const confDeg = Math.round(pred.score * 360);
+  const track = document.documentElement.classList.contains("dark") ? "rgb(51 65 85 / .55)" : "rgb(226 232 240)";
 
+  // Per-class probability bars in each emotion's hue.
   const bars = ordered.map(([label, p]) => {
-    const mm = META[label] || { color:"#94a3b8", emoji:"•" };
+    const mm = META[label] || { emoji:"•", cssVar:"--love" };
+    const c = colorFor(label);
     const pct = Math.round(p * 100);
     const isTop = label === top;
     return `
@@ -409,28 +528,46 @@ function render(pred, ms) {
           <span class="flex items-center gap-2 font-medium capitalize ${isTop ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}"><span>${mm.emoji}</span>${label}</span>
           <span class="font-mono tabular-nums text-xs ${isTop ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-400'}">${pct}%</span>
         </div>
-        <div class="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div class="ea-fill h-full rounded-full" style="width:${(p * 100).toFixed(2)}%;background:${mm.color}"></div>
+        <div class="h-2.5 w-full overflow-hidden rounded-full" style="background:${track}">
+          <div class="es-fill h-full rounded-full" style="width:${(p * 100).toFixed(2)}%;background-color:${c}"></div>
         </div>
       </div>`;
   }).join("");
 
+  // The whole distribution as one stacked spectrum strip (HF-style glance).
+  const strip = ordered.map(([label, p]) => {
+    const c = colorFor(label);
+    return `<div class="es-strip-seg h-full" title="${label} ${Math.round(p*100)}%" style="width:${(p*100).toFixed(2)}%;background:${c}"></div>`;
+  }).join("");
+
   out.innerHTML = `
-    <div class="ea-card ea-fade flex h-full flex-col p-5 sm:p-6">
-      <div class="flex items-center gap-4 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ${m.ring}/50 dark:bg-slate-800/40 dark:ring-white/5">
-        <div class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-4xl" style="background:${m.color}1a">${m.emoji}</div>
+    <div class="es-card es-pop flex h-full flex-col p-5 sm:p-6">
+      <!-- Verdict header: emoji + label + animated confidence ring. -->
+      <div class="flex items-center gap-4 rounded-2xl p-4" style="background:${topColor}14">
+        <div class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-4xl" style="background:${topColor}26">${m.emoji}</div>
         <div class="min-w-0">
-          <div class="text-2xl font-bold capitalize text-slate-900 dark:text-white">${top}</div>
+          <div class="text-2xl font-extrabold capitalize text-slate-900 dark:text-white">${top}</div>
           <div class="text-sm text-slate-500 dark:text-slate-400">${conf}% confident &middot; ${m.blurb}</div>
         </div>
-        <div class="ml-auto text-right">
-          <div class="text-3xl font-extrabold tabular-nums" style="color:${m.color}">${conf}%</div>
-          <div class="text-[11px] uppercase tracking-wide text-slate-400">confidence</div>
+        <div class="es-ring ml-auto grid h-[68px] w-[68px] shrink-0 place-items-center rounded-full"
+             style="background:conic-gradient(${topColor} ${confDeg}deg, ${track} 0deg)">
+          <div class="grid h-[54px] w-[54px] place-items-center rounded-full bg-white dark:bg-slate-900">
+            <span class="text-base font-extrabold tabular-nums" style="color:${topColor}">${conf}<span class="text-[10px]">%</span></span>
+          </div>
         </div>
       </div>
-      <div class="mt-5 space-y-3">${bars}</div>
+
+      <!-- Spectrum strip. -->
+      <div class="mt-4">
+        <div class="flex h-3 w-full overflow-hidden rounded-full" style="background:${track}">${strip}</div>
+        <p class="mt-1.5 text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Full distribution across the spectrum</p>
+      </div>
+
+      <!-- Per-class bars. -->
+      <div class="mt-4 space-y-3">${bars}</div>
+
       <div class="mt-5 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800">
-        <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>POST /predict &middot; 200 OK</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><code class="font-mono">POST /predict</code> &middot; 200 OK</span>
         <span class="font-mono tabular-nums">round-trip ${ms} ms</span>
       </div>
     </div>`;
@@ -464,7 +601,7 @@ async function classify() {
   } finally {
     btn.disabled = false;
     $("go-spin").classList.add("hidden");
-    $("go-label").textContent = "Classify emotion";
+    $("go-label").textContent = "Classify the feeling";
   }
 }
 
@@ -473,17 +610,67 @@ $("text").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") classify();
 });
 
-// Build example chips.
+// ---- Example chips, each tinted with its expected emotion. ----
 const ex = $("examples");
-EXAMPLES.forEach((t) => {
-  const c = document.createElement("button");
-  c.type = "button";
-  c.className = "ea-focus rounded-full border border-slate-200 bg-white/60 px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:text-brand-400";
-  c.textContent = t.length > 40 ? t.slice(0, 38) + "…" : t;
-  c.title = t;
-  c.addEventListener("click", () => { $("text").value = t; classify(); });
-  ex.appendChild(c);
+EXAMPLES.forEach(({ label, text }) => {
+  const c = colorFor(label);
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "es-focus inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:-translate-y-0.5";
+  chip.style.borderColor = c + "55";
+  chip.style.color = c;
+  chip.style.background = c + "12";
+  chip.innerHTML = `<span>${META[label].emoji}</span><span class="capitalize">${label}</span>`;
+  chip.title = text;
+  chip.addEventListener("click", () => { $("text").value = text; classify(); });
+  ex.appendChild(chip);
 });
+
+// ---- Code-sample tabs (cURL / Python / JavaScript), Replicate-style. ----
+const SNIPPETS = {
+  curl:
+`curl -s -X POST localhost:8000/predict \\
+  -H 'Content-Type: application/json' \\
+  -d '{"text": "i cant stop smiling today"}'
+# {"label":"joy","score":0.74,"probabilities":{...}}`,
+  python:
+`import requests
+
+r = requests.post(
+    "http://localhost:8000/predict",
+    json={"text": "i cant stop smiling today"},
+)
+pred = r.json()
+print(pred["label"], pred["score"])   # joy 0.74
+# batch: json={"texts": ["...", "..."]} -> {"predictions": [...]}`,
+  js:
+`const res = await fetch("http://localhost:8000/predict", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ text: "i cant stop smiling today" }),
+});
+const pred = await res.json();
+console.log(pred.label, pred.score);   // joy 0.74`,
+};
+let activeTab = "curl";
+function showTab(name) {
+  activeTab = name;
+  $("code-block").textContent = SNIPPETS[name];
+  document.querySelectorAll(".es-tab").forEach((b) => {
+    b.setAttribute("aria-selected", String(b.dataset.tab === name));
+  });
+}
+document.querySelectorAll(".es-tab").forEach((b) => {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+});
+$("copy-code").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(SNIPPETS[activeTab]);
+    $("copy-label").textContent = "Copied!";
+    setTimeout(() => { $("copy-label").textContent = "Copy"; }, 1400);
+  } catch (e) { /* clipboard may be blocked; ignore */ }
+});
+showTab("curl");
 
 // Pull the live version into the footer (best-effort).
 fetch("/healthz").then((r) => r.ok ? r.json() : null).then((h) => {
