@@ -141,13 +141,6 @@ Open Grafana at `http://localhost:3000` (anonymous viewer; `admin`/`admin` to ed
 
 Exported metrics: `emotion_api_requests_total`, `emotion_api_request_latency_seconds`, `emotion_api_errors_total`, `emotion_api_requests_in_progress`, `emotion_api_inference_latency_seconds`, `emotion_api_inference_batch_size`.
 
-## Screenshots
-
-> _Placeholder._ Add screenshots of the demo UI (`/demo`), the Swagger docs (`/docs`), and the Grafana dashboard here.
->
-> - `docs/demo-ui.png`: the emotion demo page
-> - `docs/grafana.png`: the Service Overview dashboard under load
-
 ## Project layout
 
 ```
